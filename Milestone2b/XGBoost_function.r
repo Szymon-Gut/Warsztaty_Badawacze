@@ -108,10 +108,7 @@ XGBoost_function <- function(train, #train set
                              lambda = 1,
                              alpha = 0){
   # data preprocessing
-
   dtrain_matrix <- XGBoost_data_preprocessing(train, target)
-
-  ### in "predict" function, use XGBoost_data_preprocessing(test, target) as a test set!!! ###
 
   # setting parameters (if ommited, default values are used)
   params <- list(booster = booster, eta = eta,

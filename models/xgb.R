@@ -435,20 +435,152 @@ for (model_name in names(other_models)) {
 }
 
 
-# Explaining the best model #
+# ============================== #
+# Explaining the best two models #
+# ============================== #
+
+set.seed(28)
+best_model <- XGBoost_function(df_no_pca %>% select(-X), 'BuyPrice',
+                               nrounds = 1000,
+                               eta = 0.05, 
+                               max_depth = 7)
+set.seed(28)
+second_model <- XGBoost_function(df_no_pca %>% select(-X), 'BuyPrice',
+                                 nrounds = 180,
+                                 eta = 0.09, 
+                                 max_depth = 8,
+                                 gamma = 4,
+                                 colsample_bytree = 1,
+                                 min_child_weight = 1,
+                                 subsample = 1)
+
+df <- df_preproc_no_pca$train %>% select(-X)
+data <- model.matrix(BuyPrice ~ . - 1, df)
+
+# 1 - best model
+# 2 - second model
+explainer1 <- explain(best_model,
+                      data,
+                      y = df$BuyPrice,
+                      label = 'XGBoost (the best model)', colorize = FALSE)
+explainer2 <- explain(second_model,
+                      data,
+                      y = df$BuyPrice,
+                      label = 'XGBoost (the second best)', colorize = FALSE)
+
+# ===== GLOBAL ===== #
+
+# Model performance
+mp1 <- model_performance(explainer1)
+mp2 <- model_performance(explainer2)
+plot(mp1)
+plot(mp2)
+plot(mp1, mp2)
+
+# Permutational variable importance
+var_imp1 <- model_parts(explainer1)
+var_imp2 <- model_parts(explainer2)
+plot(var_imp1, max_vars = 15)
+plot(var_imp2, max_vars = 15)
+plot(var_imp1, var_imp2, max_vars = 15)
+
+# ===== LOCAL ===== #
+obs1 <- data[1, , drop = FALSE]
+obs2 <- data[6001, , drop = FALSE]
+
+# Break down profile
+breakdown1_obs1  <- predict_parts(explainer1, 
+                                  new_observation = obs1,
+                                  type = "break_down")
+breakdown1_obs2  <- predict_parts(explainer1, 
+                                  new_observation = obs2,
+                                  type = "break_down")
+breakdown2_obs1  <- predict_parts(explainer2, 
+                                  new_observation = obs1,
+                                  type = "break_down")
+breakdown2_obs2  <- predict_parts(explainer2, 
+                                  new_observation = obs2,
+                                  type = "break_down")
+
+# model 1
+plot(breakdown1_obs1)
+plot(breakdown1_obs2)
+
+# model 2
+plot(breakdown2_obs1)
+plot(breakdown2_obs2)
 
 
-final_model <- XGBoost_function(df_no_pca, 'BuyPrice',
-                                nrounds = 1000,
-                                eta = 0.05, 
-                                max_depth = 7)
+# Ceteris paribus
+obs2 <- data[30, , drop = FALSE]
 
-df <- df_preproc_no_pca$train
+cp1_obs1 <- predict_profile(explainer1, new_observation = obs1)
+cp1_obs2 <- predict_profile(explainer1, new_observation = obs2)
+cp2_obs1 <- predict_profile(explainer2, new_observation = obs1)
+cp2_obs2 <- predict_profile(explainer2, new_observation = obs2)
 
-explainer <- explain(final_model,
-                     model.matrix(BuyPrice ~ . - 1, df),
-                     y = df$BuyPrice,
-                     label = 'xgboost', colorize = FALSE)
+plot(cp1_obs1, cp1_obs2, variables = c("DistanceToPoliceStation"))
+plot(cp2_obs1, cp2_obs2, variables = c("WalkScore"))
 
-mp <- model_performance(explainer)
-mp
+# Partial dependence profile
+## GrossPotentialIncome
+pdp_gpi_1 <- model_profile(explainer1, 
+                           variable = "GrossPotentialIncome",
+                           type = "partial")
+pdp_gpi_2 <- model_profile(explainer2, 
+                           variable = "GrossPotentialIncome",
+                           type = "partial")
+
+## NumberOfBathroomsWithBathtub
+pdp_nobwb_1 <- model_profile(explainer1, 
+                             variable = "NumberOfBathroomsWithBathtub",
+                             type = "partial")
+pdp_nobwb_2 <- model_profile(explainer2, 
+                             variable = "NumberOfBathroomsWithBathtub",
+                             type = "partial")
+
+## Construction
+pdp_constr_1 <- model_profile(explainer1, 
+                              variable = "Construction",
+                              type = "partial")
+pdp_constr_2 <- model_profile(explainer2, 
+                              variable = "Construction",
+                              type = "partial")
+
+# Accumulated Local Effects
+## GrossPotentialIncome
+ale_gpi_1 <- model_profile(explainer1, 
+                           variable = "GrossPotentialIncome",
+                           type = "accumulated")
+ale_gpi_2 <- model_profile(explainer2, 
+                           variable = "GrossPotentialIncome",
+                           type = "accumulated")
+
+## NumberOfBathroomsWithBathtub
+ale_nobwb_1 <- model_profile(explainer1, 
+                             variable = "NumberOfBathroomsWithBathtub",
+                             type = "accumulated")
+ale_nobwb_2 <- model_profile(explainer2, 
+                             variable = "NumberOfBathroomsWithBathtub",
+                             type = "accumulated")
+
+## Construction
+ale_constr_1 <- model_profile(explainer1, 
+                              variable = "Construction",
+                              type = "accumulated")
+ale_constr_2 <- model_profile(explainer2, 
+                              variable = "Construction",
+                              type = "accumulated")
+
+
+# PDP vs ALE
+
+plot(pdp_gpi_1, pdp_gpi_2)
+plot(ale_gpi_1, ale_gpi_2)
+
+plot(pdp_nobwb_1, pdp_nobwb_2)
+plot(ale_nobwb_1, ale_nobwb_2)
+
+plot(pdp_constr_1, pdp_constr_2)
+plot(ale_constr_1, ale_constr_2)
+
